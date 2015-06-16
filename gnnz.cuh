@@ -505,14 +505,6 @@ void gpu_compute_IC(const CSR &dA, const CSR &dB, int *drowIds, const vector<int
   int m = dA.rows;
   //int k = dA.cols;
   int n = dB.cols;
-   size_t freeMem, totalMem;
-
-    HANDLE_ERROR (cudaMemGetInfo(&freeMem, &totalMem));
-
-    fprintf(stderr, "Free = %zu, Total = %zu\n", freeMem, totalMem); 
-
-
-
 
   HANDLE_ERROR(cudaMalloc((void**)&dC.rowPtr, (m + 1) * sizeof(int)));
   HANDLE_ERROR(cudaMemset(dC.rowPtr, 0, (m + 1) * sizeof(int)));
@@ -523,6 +515,7 @@ void gpu_compute_IC(const CSR &dA, const CSR &dB, int *drowIds, const vector<int
     sgpu_CSR_IC_nnzC_a1<<<NBLOCKS, NTHREADS>>>(dA.rowPtr, dA.colInd, dB.rowPtr, dB.colInd, drowIds + hv[0], hv[1] - hv[0], m, n, dC.rowPtr);
     HANDLE_ERROR(cudaGetLastError());
   }
+
   if (hv.size() > 1 + 1 && hv[2] - hv[1] > 0) { // up to fp1
     const unsigned NTHREADS = 128; const unsigned WARP_SIZE = 1;
     const unsigned WARPS_PER_BLOCK = NTHREADS / WARP_SIZE;
@@ -639,10 +632,21 @@ void gpu_compute_IC(const CSR &dA, const CSR &dB, int *drowIds, const vector<int
   const int NBLOCKS10 = qmin3(blockAvail, hv[11] - hv[10], MAX_NBLOCKS);
   const int NBLOCKS11 = qmin3(blockAvail, hv[12] - hv[11], MAX_NBLOCKS);
   const int NBLOCKS12 = qmin3(blockAvail, hv[64] - hv[63], MAX_NBLOCKS);
+  int ret = std::max(NBLOCKS10,NBLOCKS11);
+  int NBLOCKS = std::max(ret,NBLOCKS12); 
+  int *xbs = NULL;
+  int *iJCs = NULL;
+  if(NBLOCKS > 0) {
+     HANDLE_ERROR(cudaMalloc((void**)&xbs, NBLOCKS * n * sizeof(int)));
+    HANDLE_ERROR(cudaMemset(xbs, -1, NBLOCKS * n * sizeof(int)));
+    }
+/*
+
+---  changing this in order to check ----
   const int NBLOCKS = std::max(NBLOCKS10,NBLOCKS12);
   int *xbs = NULL;
   int *iJCs = NULL;
-
+*/
   if (hv.size() > 10 + 1 && hv[11] - hv[10] > 0) { // up to fp512
     //const unsigned NTHREADS = 128;
      
@@ -650,11 +654,8 @@ void gpu_compute_IC(const CSR &dA, const CSR &dB, int *drowIds, const vector<int
     //const unsigned WARPS_PER_BLOCK = NTHREADS / WARP_SIZE;
     //const unsigned NBLOCKS = qmin(65535, hv[11] - hv[10]);
     printf("NBLOCKS10=%u\n", NBLOCKS);
-    int *xbs = NULL;
-    if(NBLOCKS > 0) {
-     HANDLE_ERROR(cudaMalloc((void**)&xbs, NBLOCKS * n * sizeof(int)));
-    HANDLE_ERROR(cudaMemset(xbs, -1, NBLOCKS * n * sizeof(int)));
-    }
+    //int *xbs = NULL;
+    
     sgpu_SpGEMM_mix_11<NTHREADS><<<NBLOCKS, NTHREADS>>>(dA.rowPtr, dA.colInd, dA.values, dB.rowPtr, dB.colInd, dB.values, drowIds + hv[10], hv[11] - hv[10], m, n, dC.rowPtr,temp_C_512_id,temp_C_512_val,xbs);
     HANDLE_ERROR(cudaGetLastError());
   }
@@ -666,11 +667,6 @@ if (hv.size() > 11 + 1 && hv[12] - hv[11] > 0) { // up to fp512
     //const unsigned WARPS_PER_BLOCK = NTHREADS / WARP_SIZE;
     const unsigned NBLOCKS = NBLOCKS11;
     printf("NBLOCKS11=%u\n", NBLOCKS);
-    int *xbs = NULL;
-    if(NBLOCKS > 0) {
-     HANDLE_ERROR(cudaMalloc((void**)&xbs, NBLOCKS * n * sizeof(int)));
-    HANDLE_ERROR(cudaMemset(xbs, -1, NBLOCKS * n * sizeof(int)));
-    }
     sgpu_SpGEMM_mix_12<NTHREADS><<<NBLOCKS, NTHREADS>>>(dA.rowPtr, dA.colInd, dA.values, dB.rowPtr, dB.colInd, dB.values, drowIds + hv[11], hv[12] - hv[11], m, n, dC.rowPtr,temp_C_1024_id,temp_C_1024_val,xbs);
     HANDLE_ERROR(cudaGetLastError());
   }
@@ -681,7 +677,6 @@ if (hv.size() > 11 + 1 && hv[12] - hv[11] > 0) { // up to fp512
     int count_ijc = n - MAX_SHARED_IC; 
      
      if (NBLOCKS > 0) {
-        HANDLE_ERROR(cudaMalloc((void**)&xbs, NBLOCKS * n * sizeof(int))); 
         cudaMemset(xbs, 0, NBLOCKS * n * sizeof(int));
         HANDLE_ERROR(cudaMalloc((void**)&iJCs, NBLOCKS * count_ijc * sizeof(int)));
      }

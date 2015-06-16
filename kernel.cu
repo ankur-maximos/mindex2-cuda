@@ -507,21 +507,17 @@ if (hv.size() > 11 + 1 && hv[12] - hv[11] > 0) { // up to fp1024
 
 CSR sgpuSpMMWrapper(const CSR &dA, const CSR &dB, int *drowIds, const vector<int> &hv) {
   CSR dC;
+/*
 
+  ----------    Fetching the amount of memory total or free --------
     cudaDeviceProp deviceProp;
-
     HANDLE_ERROR (cudaGetDeviceProperties(&deviceProp, 0));
-
     size_t gpuGlobalMem = deviceProp.totalGlobalMem;
-
     fprintf(stderr, "GPU global memory = %zu Bytes\n", gpuGlobalMem); 
-
     size_t freeMem, totalMem;
-
     HANDLE_ERROR (cudaMemGetInfo(&freeMem, &totalMem));
-
     fprintf(stderr, "Free = %zu, Total = %zu\n", freeMem, totalMem); 
-
+*/
 
   QValue *temp_C_128_val, *temp_C_256_val, *temp_C_512_val, *temp_C_1024_val;
   int *temp_C_128_id, *temp_C_256_id, *temp_C_512_id, *temp_C_1024_id;
