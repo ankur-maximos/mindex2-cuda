@@ -135,99 +135,6 @@ __global__ void sgpu_CSR_IC_nnzC_mid(const int IA[], const int JA[],
   }
 }
 
-/*
-
---- working code commenting to try something
-
-template <int BLOCK_THREADS>
-__global__ void sgpu_CSR_IC_nnzC_olarge(const int IA[], const int JA[],
-    const int IB[], const int JB[],
-    const int drowIds[], const int gcount,
-    const int m, const int n, int* IC,
-    int *xbs, int *iJCs) {
-  __shared__ int as[BLOCK_THREADS];
-  int *xb = xbs + blockIdx.x * n;
-  int *iJC = iJCs + blockIdx.x * n;
-  if (threadIdx.x == 0 && blockIdx.x ==0) {
-    IC[m] = 0;
-  }
-  __shared__ int count;
-  if (threadIdx.x == 0) {
-    count = 0;
-  }
-  __syncthreads();
-  for (int q = blockIdx.x; q < gcount; q += gridDim.x) {
-    int rowId = drowIds[q];
-    if (threadIdx.x == 0) IC[rowId] = 0;
-    int end_Row = IA[rowId + 1];
-    for (int ap = IA[rowId] + threadIdx.x; __syncthreads_or(ap < end_Row); ap += blockDim.x) {
-      int predicate = (ap < end_Row);
-      int a = predicate ? JA[ap] : -1;
-      as[threadIdx.x] = a;
-      unsigned total = min(end_Row + threadIdx.x - ap, blockDim.x);
-      __syncthreads();
-      for (int ap = 0; ap < total; ++ap) {
-        int a = as[ap];
-        for (int bp = IB[a] + threadIdx.x; bp < IB[a + 1]; bp += blockDim.x) {
-          int b = JB[bp];
-	  int xbB = xb[b];
-          if (xbB == 0) {
-            iJC[atomicAdd(&count, 1)] = b;
-            xb[b] = true;
-          }
-        }
-        __syncthreads();
-      }
-    }
-    __syncthreads();
-    for (int cp = threadIdx.x; cp < count; cp += blockDim.x) {
-      int c = iJC[cp];
-      xb[c] = 0;
-    }
-    __syncthreads();
-    if (threadIdx.x == 0) {
-      IC[rowId] = count;
-      count = 0;
-    }
-  }
-}
-*/
-
-/*
-__inline__ __device__
-void binarysearch(int         *key,
-                  int          key_input,
-                  int          size,
-                  bool        *is_new_col)
-{
-    int start = 0;
-    int stop  = size - 1;
-    int median;
-    int key_median;
-
-    while (stop >= start)
-    {    
-        median = (stop + start) / 2;
-        key_median = key[median];
-
-        if (key_input > key_median)
-            start = median + 1;
-        else if (key_input < key_median)
-            stop = median - 1;
-        else     
-        { 
-            // atomicAdd is not needed since duplicate is not existed in each input row
-            //s_val[median] += val_input;
-            *is_new_col = 0;
-            break;
-        }        
-    }            
-    //return start;
-}
-
-*/
-
-
 template <int BLOCK_THREADS>
 __global__ void sgpu_CSR_IC_nnzC_olarge(const int IA[], const int JA[],
     const int IB[], const int JB[],
@@ -292,115 +199,6 @@ __global__ void sgpu_CSR_IC_nnzC_olarge(const int IA[], const int JA[],
   }
 }
 
-/*
- 
- ---- continue updating this kernel
-
-template <int BLOCK_THREADS>
-__global__ void sgpu_CSR_IC_nnzC_olarge(const int IA[], const int JA[],
-    const int IB[], const int JB[],
-    const int drowIds[], const int gcount,
-    const int m, const int n, int* IC,
-    int *iJCs) {
-  __shared__ int as[BLOCK_THREADS];
-  __shared__ int iJC_shared[MAX_SHARED_IC];
-
-  bool is_new_col;
-  int *iJC = iJCs + blockIdx.x * (n - MAX_SHARED_IC);
-  if (threadIdx.x == 0 && blockIdx.x ==0) {
-    IC[m] = 0;
-  }
-  __shared__ int count;
-  if (threadIdx.x == 0) {
-    count = 0;
-  }
-  __syncthreads();
-  for (int q = blockIdx.x; q < gcount; q += gridDim.x) {
-    int rowId = drowIds[q];
-    if (threadIdx.x == 0) IC[rowId] = 0;
-    int end_Row = IA[rowId + 1];
-    for (int ap = IA[rowId] + threadIdx.x; __syncthreads_or(ap < end_Row); ap += blockDim.x) {
-      int predicate = (ap < end_Row);
-      int a = predicate ? JA[ap] : -1;
-      as[threadIdx.x] = a;
-      unsigned total = min(end_Row + threadIdx.x - ap, blockDim.x);
-      __syncthreads();
-      for (int ap = 0; ap < total; ++ap) {
-        int a = as[ap];
-        for (int bp = IB[a] + threadIdx.x; bp < IB[a + 1]; bp += blockDim.x) {
-          int b = JB[bp];
- 	  is_new_col = 1;
-	  if(count < MAX_SHARED_IC)
-          	binarysearch(iJC_shared, b, count, &is_new_col);
-          else 
- 		binarysearch(iJC, b, (count-MAX_SHARED_IC), &is_new_col);
-	  //__syncthreads();
-	  if(is_new_col) {
-       	    int pos = atomicAdd(&count, 1);
-	    if(pos < MAX_SHARED_IC) 
-		iJC_shared[pos] = b;
-	    else
-		iJC[pos - MAX_SHARED_IC] = b;
-	  }
-        }
-        __syncthreads();
-      }
-    }
-    __syncthreads();
-    if (threadIdx.x == 0) {
-      IC[rowId] = count;
-      count = 0;
-    }
-  }
-}
-
-*/
-
-/*
-template <int BLOCK_THREADS>
-__global__ void sgpu_CSR_IC_nnzC_olarge(const int IA[], const int JA[],
-    const int IB[], const int JB[],
-    const int drowIds[], const int gcount,
-    const int m, const int n, int* IC, 
-    int *xbs, int *iJCs) {
- // __shared__ int as[BLOCK_THREADS];
-  int *xb = xbs + blockIdx.x * n;
-  int *iJC = iJCs + blockIdx.x * n;
-  if (threadIdx.x == 0 && blockIdx.x ==0) {
-    IC[m] = 0;
-  }
-  __shared__ int count;
-  if (threadIdx.x == 0) {
-    count = 0;
-  }
-  __syncthreads();
-  for (int q = blockIdx.x; q < gcount; q += gridDim.x) {
-    int rowId = drowIds[q];
-    if (threadIdx.x == 0) IC[rowId] = 0;
-    for (int ap = IA[rowId]; ap < IA[rowId + 1]; ap++) {
-      int a = JA[ap]; 
-        for (int bp = IB[a] + threadIdx.x; bp < IB[a + 1]; bp += blockDim.x) {
-          int b = JB[bp];
-          if (xb[b] == 0) {
-            iJC[atomicAdd(&count, 1)] = b;
-            xb[b] = true;
-          } 
- 	}  
-        __syncthreads();
-    }   
-    __syncthreads();
-    for (int cp = threadIdx.x; cp < count; cp += blockDim.x) {
-      int c = iJC[cp];
-      xb[c] = 0;
-    }   
-    __syncthreads();
-    if (threadIdx.x == 0) {
-      IC[rowId] = count;
-      count = 0;
-    }   
-  }
-}
-*/
 
 template <int BLOCK_THREADS>
 __global__ void sgpu_CSR_IC_nnzC_vlarge(const int IA[], const int JA[],
@@ -567,36 +365,8 @@ void gpu_compute_IC(const CSR &dA, const CSR &dB, int *drowIds, const vector<int
     HANDLE_ERROR(cudaGetLastError());
   }
 
- /*
-
----- commenting this to try combining compute and structure
-  if (hv.size() > 8 + 1 && hv[9] - hv[8] > 0) { // up to fp128
-    const unsigned NTHREADS = 128; const unsigned WARP_SIZE = 64;
-    const unsigned WARPS_PER_BLOCK = NTHREADS / WARP_SIZE;
-    const unsigned NBLOCKS = qmin(65535, (hv[9] - hv[8] + WARPS_PER_BLOCK - 1) / WARPS_PER_BLOCK);
-    sgpu_CSR_IC_nnzC_mid<NTHREADS, WARP_SIZE, 191><<<NBLOCKS, NTHREADS>>>(dA.rowPtr, dA.colInd, dB.rowPtr, dB.colInd, drowIds + hv[8], hv[9] - hv[8], m, n, dC.rowPtr);
-    HANDLE_ERROR(cudaGetLastError());
-  }
-*/
-
-/*
-
-  ----- commenting this to try compute and structure phase together ----
-
-  if (hv.size() > 9 + 1 && hv[10] - hv[9] > 0) { // up to fp256
-    const unsigned NTHREADS = 128; 
-    //const unsigned WARP_SIZE = 128;
-    //const unsigned WARPS_PER_BLOCK = NTHREADS / WARP_SIZE;
-    const unsigned NBLOCKS = qmin(65535, hv[10] - hv[9]);
-    printf("NBLOCKS9=%u\n", NBLOCKS);
-    sgpu_CSR_IC_nnzC_mid4<NTHREADS><<<NBLOCKS, NTHREADS>>>(dA.rowPtr, dA.colInd, dB.rowPtr, dB.colInd, drowIds + hv[9], hv[10] - hv[9], m, n, dC.rowPtr);
-    HANDLE_ERROR(cudaGetLastError());
-  }
-*/
   if (hv.size() > 8 + 1 && hv[9] - hv[8] > 0) { // up to fp128
     const unsigned NTHREADS = 64; 
-    // const unsigned WARP_SIZE = 64;
-    // const unsigned WARPS_PER_BLOCK = NTHREADS / WARP_SIZE;
     const unsigned NBLOCKS = qmin(65535, hv[9] - hv[8]);
     sgpu_SpGEMM_mix_mid<NTHREADS><<<NBLOCKS, NTHREADS>>>(dA.rowPtr, dA.colInd, dA.values, dB.rowPtr, dB.colInd, dB.values, drowIds + hv[8], hv[9] - hv[8], m, n, dC.rowPtr, temp_C_128_id, temp_C_128_val);
     HANDLE_ERROR(cudaGetLastError());
@@ -604,68 +374,40 @@ void gpu_compute_IC(const CSR &dA, const CSR &dB, int *drowIds, const vector<int
 
   if (hv.size() > 9 + 1 && hv[10] - hv[9] > 0) { // up to fp256
     const unsigned NTHREADS = 128; 
-    //const unsigned WARP_SIZE = 128;
-    //const unsigned WARPS_PER_BLOCK = NTHREADS / WARP_SIZE;
     const unsigned NBLOCKS = qmin(65535, hv[10] - hv[9]);
     printf("NBLOCKS9=%u\n", NBLOCKS);
     sgpu_SpGEMM_mix_mid<NTHREADS><<<NBLOCKS, NTHREADS>>>(dA.rowPtr, dA.colInd, dA.values, dB.rowPtr, dB.colInd, dB.values, drowIds + hv[9], hv[10] - hv[9], m, n, dC.rowPtr,temp_C_256_id,temp_C_256_val);
     HANDLE_ERROR(cudaGetLastError());
   }
 
-/*  
-   if (hv.size() > 10 + 1 && hv[11] - hv[10] > 0) { // up to fp512
-    const unsigned NTHREADS = 256; 
-    //const unsigned WARP_SIZE = 128;
-    //const unsigned WARPS_PER_BLOCK = NTHREADS / WARP_SIZE;
+  if (hv.size() > 10 + 1 && hv[11] - hv[10] > 0) { // up to fp512
+    const unsigned NTHREADS = 256;
     const unsigned NBLOCKS = qmin(65535, hv[11] - hv[10]);
-    printf("NBLOCKS9=%u\n", NBLOCKS);
+    printf("NBLOCKS10=%u\n", NBLOCKS);
     sgpu_SpGEMM_mix_mid<NTHREADS><<<NBLOCKS, NTHREADS>>>(dA.rowPtr, dA.colInd, dA.values, dB.rowPtr, dB.colInd, dB.values, drowIds + hv[10], hv[11] - hv[10], m, n, dC.rowPtr,temp_C_512_id,temp_C_512_val);
     HANDLE_ERROR(cudaGetLastError());
-  } */
+  }
 
-  //assert (hv.size() == 65);
-  //very large
+  assert (hv.size() == 65);
   const int NTHREADS = 128;
   const double memoryMWordsAvail = GBs * 1000.0 / 4 - ((dA.nnz * 2 + dA.rows) + (dB.nnz * 2 + dB.rows) + dA.rows) / 1000.0 / 1000.0;
   const double blockAvail = memoryMWordsAvail * 1000 * 1000 / (n * 2);
-  //printf("memoryMWordsAvail=%lf blockAvail = %lf\n", memoryMWordsAvail, blockAvail);
-  const int NBLOCKS10 = qmin3(blockAvail, hv[11] - hv[10], MAX_NBLOCKS);
+  printf("memoryMWordsAvail=%lf blockAvail = %lf\n", memoryMWordsAvail, blockAvail);
+ // const int NBLOCKS10 = qmin3(blockAvail, hv[11] - hv[10], MAX_NBLOCKS);
   const int NBLOCKS11 = qmin3(blockAvail, hv[12] - hv[11], MAX_NBLOCKS);
   const int NBLOCKS12 = qmin3(blockAvail, hv[64] - hv[63], MAX_NBLOCKS);
-  int ret = std::max(NBLOCKS10,NBLOCKS11);
-  int NBLOCKS = std::max(ret,NBLOCKS12); 
+  //int ret = std::max(NBLOCKS10,NBLOCKS11);
+  int NBLOCKS = std::max(NBLOCKS11,NBLOCKS12); 
   int *xbs = NULL;
   int *iJCs = NULL;
   if(NBLOCKS > 0) {
      HANDLE_ERROR(cudaMalloc((void**)&xbs, NBLOCKS * n * sizeof(int)));
     HANDLE_ERROR(cudaMemset(xbs, -1, NBLOCKS * n * sizeof(int)));
     }
-/*
 
----  changing this in order to check ----
-  const int NBLOCKS = std::max(NBLOCKS10,NBLOCKS12);
-  int *xbs = NULL;
-  int *iJCs = NULL;
-*/
-  if (hv.size() > 10 + 1 && hv[11] - hv[10] > 0) { // up to fp512
-    //const unsigned NTHREADS = 128;
-     
-    //const unsigned WARP_SIZE = 128;
-    //const unsigned WARPS_PER_BLOCK = NTHREADS / WARP_SIZE;
-    //const unsigned NBLOCKS = qmin(65535, hv[11] - hv[10]);
-    printf("NBLOCKS10=%u\n", NBLOCKS);
-    //int *xbs = NULL;
-    
-    sgpu_SpGEMM_mix_11<NTHREADS><<<NBLOCKS, NTHREADS>>>(dA.rowPtr, dA.colInd, dA.values, dB.rowPtr, dB.colInd, dB.values, drowIds + hv[10], hv[11] - hv[10], m, n, dC.rowPtr,temp_C_512_id,temp_C_512_val,xbs);
-    HANDLE_ERROR(cudaGetLastError());
-  }
 
 if (hv.size() > 11 + 1 && hv[12] - hv[11] > 0) { // up to fp512
     const unsigned NTHREADS = 128;
-     
-    //const unsigned WARP_SIZE = 128;
-    //const unsigned WARPS_PER_BLOCK = NTHREADS / WARP_SIZE;
-    const unsigned NBLOCKS = NBLOCKS11;
     printf("NBLOCKS11=%u\n", NBLOCKS);
     sgpu_SpGEMM_mix_12<NTHREADS><<<NBLOCKS, NTHREADS>>>(dA.rowPtr, dA.colInd, dA.values, dB.rowPtr, dB.colInd, dB.values, drowIds + hv[11], hv[12] - hv[11], m, n, dC.rowPtr,temp_C_1024_id,temp_C_1024_val,xbs);
     HANDLE_ERROR(cudaGetLastError());
@@ -673,21 +415,14 @@ if (hv.size() > 11 + 1 && hv[12] - hv[11] > 0) { // up to fp512
 
 
   if (hv[64] - hv[63] > 0) {
-
     int count_ijc = n - MAX_SHARED_IC; 
-     
      if (NBLOCKS > 0) {
         cudaMemset(xbs, 0, NBLOCKS * n * sizeof(int));
         HANDLE_ERROR(cudaMalloc((void**)&iJCs, NBLOCKS * count_ijc * sizeof(int)));
-     }
- 
-    //const int NBLOCKS = NBLOCKS12;
-    // const int NBLOCKS = 512;
+     } 
     printf("nnz olarge memoryMWordsAvail=%lf blockAvail = %lf NBLOCKS=%d hsize=%d\n", memoryMWordsAvail, blockAvail, NBLOCKS, hv[64] - hv[63]);
     sgpu_CSR_IC_nnzC_olarge<NTHREADS><<<NBLOCKS, NTHREADS>>>(dA.rowPtr, dA.colInd, dB.rowPtr, dB.colInd, drowIds + hv[63], hv[64] - hv[63], m, n, dC.rowPtr, xbs, iJCs);
     HANDLE_ERROR(cudaGetLastError());
-    //HANDLE_ERROR(cudaFree(iJCs));
-    //HANDLE_ERROR(cudaFree(xbs));
   }
   if (NBLOCKS > 0) {
     HANDLE_ERROR(cudaFree(iJCs));
